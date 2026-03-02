@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'screens/main_layout.dart';
+import 'screens/login_screen.dart';
 
 void main() {
   runApp(const PosApp());
@@ -30,7 +32,32 @@ class PosApp extends StatelessWidget {
         fontFamily: 'Segoe UI',
       ),
       themeMode: ThemeMode.system, // Supports both light/dark based on system
-      home: const MainLayout(),
+      home: const AuthWrapper(),
+    );
+  }
+}
+
+class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String?>(
+      future: const FlutterSecureStorage().read(key: 'auth_token'),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final hasToken = snapshot.hasData && snapshot.data != null;
+        if (hasToken) {
+          return const MainLayout();
+        } else {
+          return const LoginScreen();
+        }
+      },
     );
   }
 }

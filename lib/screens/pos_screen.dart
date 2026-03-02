@@ -39,6 +39,21 @@ class _PosScreenState extends State<PosScreen> {
     return AnimatedBuilder(
       animation: _posState,
       builder: (context, child) {
+        if (_posState.isLoading) {
+          return const Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Memuat Data Toko...'),
+                ],
+              ),
+            ),
+          );
+        }
+
         return Scaffold(
           body: Row(
             children: [
@@ -527,10 +542,27 @@ class _PosScreenState extends State<PosScreen> {
             child: FilledButton.icon(
               onPressed: _posState.cart.isEmpty
                   ? null
-                  : () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Processing payment...')),
-                      );
+                  : () async {
+                      final success = await _posState.checkout();
+                      if (!context.mounted) return;
+
+                      if (success) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Transaksi Berhasil!'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Transaksi Gagal. Silakan coba lagi.',
+                            ),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
                     },
               icon: const Icon(Icons.payments),
               label: const Text(

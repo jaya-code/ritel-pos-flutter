@@ -3,118 +3,45 @@ import '../models/product.dart';
 import '../models/cart_item.dart';
 import '../models/member.dart';
 import '../models/promo.dart';
+import '../services/api_service.dart';
 
 class PosState extends ChangeNotifier {
-  final List<Member> members = [
-    Member(id: 'm1', name: 'Budi Santoso', phone: '081234567890', points: 150),
-    Member(id: 'm2', name: 'Siti Aminah', phone: '089876543210', points: 45),
-    Member(id: 'm3', name: 'Ahmad Yani', phone: '085512349876', points: 300),
-  ];
+  final ApiService _apiService = ApiService();
 
-  final List<Promo> promos = [
-    Promo(
-      id: 'prm1',
-      code: 'PROMO10',
-      description: 'Diskon 10% Semua Item',
-      discountPercentage: 10.0,
-    ),
-    Promo(
-      id: 'prm2',
-      code: 'MEMBER20',
-      description: 'Diskon Spesial Member 20%',
-      discountPercentage: 20.0,
-    ),
-    Promo(
-      id: 'prm3',
-      code: 'GAJIAN5',
-      description: 'Diskon Gajian 5%',
-      discountPercentage: 5.0,
-    ),
-  ];
+  bool _isLoading = true;
+  bool get isLoading => _isLoading;
 
-  final List<Product> _allProducts = [
-    Product(
-      id: 'p1',
-      sku: 'CLO-001',
-      title: 'T-Shirt Katun Polos',
-      price: 75000,
-      categoryId: 'clothing',
-      imageUrl: '👕',
-      stock: 50,
-    ),
-    Product(
-      id: 'p2',
-      sku: 'CLO-002',
-      title: 'Celana Jeans Pria',
-      price: 250000,
-      categoryId: 'clothing',
-      imageUrl: '👖',
-      stock: 20,
-    ),
-    Product(
-      id: 'p3',
-      sku: 'ELE-001',
-      title: 'Kabel USB-C Fast Charging',
-      price: 45000,
-      categoryId: 'electronics',
-      imageUrl: '🔌',
-      stock: 100,
-    ),
-    Product(
-      id: 'p4',
-      sku: 'ELE-002',
-      title: 'Powerbank 10000mAh',
-      price: 150000,
-      categoryId: 'electronics',
-      imageUrl: '🔋',
-      stock: 15,
-    ),
-    Product(
-      id: 'p5',
-      sku: 'ELE-003',
-      title: 'Earphone Bluetooth',
-      price: 120000,
-      categoryId: 'electronics',
-      imageUrl: '🎧',
-      stock: 30,
-    ),
-    Product(
-      id: 'p6',
-      sku: 'ACC-001',
-      title: 'Kacamata Hitam Anti-UV',
-      price: 85000,
-      categoryId: 'accessories',
-      imageUrl: '🕶️',
-      stock: 40,
-    ),
-    Product(
-      id: 'p7',
-      sku: 'ACC-002',
-      title: 'Topi Baseball Kanvas',
-      price: 55000,
-      categoryId: 'accessories',
-      imageUrl: '🧢',
-      stock: 25,
-    ),
-    Product(
-      id: 'p8',
-      sku: 'HOU-001',
-      title: 'Sabun Cair 500ml',
-      price: 35000,
-      categoryId: 'household',
-      imageUrl: '🧴',
-      stock: 60,
-    ),
-    Product(
-      id: 'p9',
-      sku: 'HOU-002',
-      title: 'Sikat Gigi Elektrik',
-      price: 95000,
-      categoryId: 'household',
-      imageUrl: '🪥',
-      stock: 12,
-    ),
-  ];
+  List<Member> members = [];
+  List<Promo> promos = [];
+  List<Product> _allProducts = [];
+
+  PosState() {
+    _initData();
+  }
+
+  Future<void> _initData() async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final results = await Future.wait([
+        _apiService.getProducts(),
+        _apiService.getMembers(),
+        _apiService.getPromos(),
+      ]);
+
+      _allProducts = results[0] as List<Product>;
+      members = results[1] as List<Member>;
+      promos = results[2] as List<Promo>;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error loading API data: $e');
+      }
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 
   String _searchQuery = '';
   String get searchQuery => _searchQuery;
@@ -211,4 +138,35 @@ class PosState extends ChangeNotifier {
   double get tax => discountedSubtotal * 0.11; // 11% tax applies after discount
 
   double get total => discountedSubtotal + tax;
+
+  Future<bool> checkout() async {
+    if (_cart.isEmpty) return false;
+
+    _isLoading = true;
+    notifyListeners();
+
+    final cartData = _cart.map((item) {
+      return {
+        'id': int.tryParse(item.product.id) ?? 0,
+        'quantity': item.quantity,
+        'discount': 0,
+      };
+    }).toList();
+
+    final success = await _apiService.processTransaction(
+      cartData: cartData,
+      amountPaid: total,
+      globalDiscount: discountAmount,
+    );
+
+    _isLoading = false;
+
+    if (success) {
+      clearCart();
+    } else {
+      notifyListeners();
+    }
+
+    return success;
+  }
 }

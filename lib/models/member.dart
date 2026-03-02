@@ -10,4 +10,13 @@ class Member {
     required this.phone,
     this.points = 0,
   });
+
+  factory Member.fromJson(Map<String, dynamic> json) {
+    return Member(
+      id: json['id'],
+      name: json['name'],
+      phone: json['phone'],
+      points: json['points'] ?? 0,
+    );
+  }
 }

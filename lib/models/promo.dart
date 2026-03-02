@@ -10,4 +10,13 @@ class Promo {
     required this.description,
     required this.discountPercentage,
   });
+
+  factory Promo.fromJson(Map<String, dynamic> json) {
+    return Promo(
+      id: json['id'],
+      code: json['code'],
+      description: json['description'],
+      discountPercentage: (json['discountPercentage'] as num).toDouble(),
+    );
+  }
 }
