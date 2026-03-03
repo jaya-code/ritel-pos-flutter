@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'pos_screen.dart';
+import 'transactions_screen.dart';
+import 'login_screen.dart';
+import '../services/api_service.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -14,7 +17,7 @@ class _MainLayoutState extends State<MainLayout> {
   final List<Widget> _screens = [
     const PosScreen(),
     const Center(child: Text('Dashboard', style: TextStyle(fontSize: 24))),
-    const Center(child: Text('Transactions', style: TextStyle(fontSize: 24))),
+    const TransactionsScreen(),
     const Center(child: Text('Customers', style: TextStyle(fontSize: 24))),
     const Center(child: Text('Settings', style: TextStyle(fontSize: 24))),
   ];
@@ -64,6 +67,26 @@ class _MainLayoutState extends State<MainLayout> {
                 label: Text('Settings'),
               ),
             ],
+            trailing: Expanded(
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 16.0),
+                  child: IconButton(
+                    icon: const Icon(Icons.logout, color: Colors.red),
+                    tooltip: 'Logout',
+                    onPressed: () async {
+                      await ApiService().logout();
+                      if (!context.mounted) return;
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
           ),
           const VerticalDivider(thickness: 1, width: 1),
           // Main Content

@@ -542,27 +542,8 @@ class _PosScreenState extends State<PosScreen> {
             child: FilledButton.icon(
               onPressed: _posState.cart.isEmpty
                   ? null
-                  : () async {
-                      final success = await _posState.checkout();
-                      if (!context.mounted) return;
-
-                      if (success) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Transaksi Berhasil!'),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Transaksi Gagal. Silakan coba lagi.',
-                            ),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
+                  : () {
+                      _showCheckoutModal(context);
                     },
               icon: const Icon(Icons.payments),
               label: const Text(
@@ -578,6 +559,278 @@ class _PosScreenState extends State<PosScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showCheckoutModal(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return _CheckoutModal(posState: _posState);
+      },
+    );
+  }
+}
+
+class _CheckoutModal extends StatefulWidget {
+  final PosState posState;
+  const _CheckoutModal({required this.posState});
+
+  @override
+  State<_CheckoutModal> createState() => _CheckoutModalState();
+}
+
+class _CheckoutModalState extends State<_CheckoutModal> {
+  String _selectedMethod = 'Tunai';
+  final TextEditingController _cashController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _cashController.addListener(() {
+      setState(() {}); // Rebuild to update the change calculation
+    });
+  }
+
+  @override
+  void dispose() {
+    _cashController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currencyFormat = NumberFormat.currency(
+      locale: 'id',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    );
+
+    final total = widget.posState.total;
+
+    double changeAmount = 0;
+    if (_selectedMethod == 'Tunai') {
+      final inputAmount = double.tryParse(_cashController.text) ?? 0;
+      if (inputAmount > total) {
+        changeAmount = inputAmount - total;
+      }
+    }
+
+    return AlertDialog(
+      title: const Text('Konfirmasi Pembayaran'),
+      content: SizedBox(
+        width: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(
+                  context,
+                ).colorScheme.primaryContainer.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [
+                  const Text(
+                    'Total Pembayaran',
+                    style: TextStyle(fontSize: 16),
+                  ),
+                  Text(
+                    currencyFormat.format(total),
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            DropdownButtonFormField<String>(
+              value: _selectedMethod,
+              isExpanded: true,
+              decoration: InputDecoration(
+                labelText: 'Metode Pembayaran',
+                prefixIcon: const Icon(Icons.payment_outlined),
+                filled: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              items: widget.posState.paymentMethods.map((method) {
+                return DropdownMenuItem<String>(
+                  value: method,
+                  child: Text(method),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedMethod = value ?? 'Tunai';
+                  _cashController.clear();
+                });
+              },
+            ),
+            if (_selectedMethod == 'Tunai') ...[
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _cashController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Jumlah Uang Diterima',
+                  prefixText: 'Rp ',
+                  filled: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              if (changeAmount > 0) ...[
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Kembalian:',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      currencyFormat.format(changeAmount),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _QuickCashBtn(
+                    amount: total,
+                    label: 'Uang Pas',
+                    onSelect: (val) =>
+                        _cashController.text = val.toInt().toString(),
+                  ),
+                  _QuickCashBtn(
+                    amount: 50000,
+                    label: '50k',
+                    onSelect: (val) =>
+                        _cashController.text = val.toInt().toString(),
+                  ),
+                  _QuickCashBtn(
+                    amount: 100000,
+                    label: '100k',
+                    onSelect: (val) =>
+                        _cashController.text = val.toInt().toString(),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Batal'),
+        ),
+        FilledButton.icon(
+          onPressed: () async {
+            double amountPaid = total; // default to total
+            if (_selectedMethod == 'Tunai') {
+              final parsed = double.tryParse(_cashController.text);
+              print('--- CHECKOUT VALIDATION ---');
+              print('Total Expected: $total');
+              print('Cash Text: "${_cashController.text}"');
+              print('Parsed Cash: $parsed');
+              print('Difference: ${parsed != null ? (total - parsed) : "N/A"}');
+
+              // Allow a small epsilon (e.g., 0.01) to account for double precision differences
+              if (parsed == null || (total - parsed) > 0.01) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Jumlah uang tidak boleh kurang dari total!'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+              amountPaid = parsed;
+            }
+
+            // Show loading dialog? Nah, state triggers it
+            final scaffoldMessenger = ScaffoldMessenger.of(context);
+            Navigator.pop(context); // close modal
+
+            final status = await widget.posState.checkout(
+              amountPaid,
+              _selectedMethod,
+            );
+
+            if (status == 'online') {
+              scaffoldMessenger.showSnackBar(
+                const SnackBar(
+                  content: Text('Transaksi Berhasil (Online)!'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            } else if (status.startsWith('offline')) {
+              scaffoldMessenger.showSnackBar(
+                SnackBar(
+                  content: Text('Tersimpan Offline: $status'),
+                  backgroundColor: Colors.orange,
+                  duration: const Duration(seconds: 10),
+                ),
+              );
+            } else {
+              scaffoldMessenger.showSnackBar(
+                SnackBar(
+                  content: Text('Transaksi Gagal: $status'),
+                  backgroundColor: Colors.red,
+                  duration: const Duration(seconds: 10),
+                ),
+              );
+            }
+          },
+          icon: const Icon(Icons.check_circle_outline),
+          label: const Text('Konfirmasi & Bayar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickCashBtn extends StatelessWidget {
+  final double amount;
+  final String label;
+  final Function(double) onSelect;
+
+  const _QuickCashBtn({
+    required this.amount,
+    required this.label,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: () => onSelect(amount),
+      style: OutlinedButton.styleFrom(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: Text(label),
     );
   }
 }

@@ -23,6 +23,9 @@ class PosState extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
+    // Try to sync any queued offline transactions first
+    await _apiService.syncPendingTransactions();
+
     try {
       final results = await Future.wait([
         _apiService.getProducts(),
@@ -51,6 +54,13 @@ class PosState extends ChangeNotifier {
 
   Promo? _selectedPromo;
   Promo? get selectedPromo => _selectedPromo;
+
+  final List<String> paymentMethods = [
+    'Tunai',
+    'Qris Statis',
+    'Qris Dinamis',
+    'Debit',
+  ];
 
   List<Product> get filteredProducts {
     if (_searchQuery.isEmpty) {
@@ -139,34 +149,39 @@ class PosState extends ChangeNotifier {
 
   double get total => discountedSubtotal + tax;
 
-  Future<bool> checkout() async {
-    if (_cart.isEmpty) return false;
+  Future<String> checkout(double amountPaid, String paymentMethod) async {
+    if (_cart.isEmpty) return 'error';
 
     _isLoading = true;
     notifyListeners();
 
     final cartData = _cart.map((item) {
+      // API requires id to be int. Strip non-numeric chars if it was mock data 'p1' -> '1'.
+      final numericIdStr = item.product.id.replaceAll(RegExp(r'[^0-9]'), '');
+      final id = int.tryParse(numericIdStr) ?? 0;
+
       return {
-        'id': int.tryParse(item.product.id) ?? 0,
+        'id': id,
         'quantity': item.quantity,
-        'discount': 0,
+        'discount': 0, // Using double for API 'decimal' field
       };
     }).toList();
 
-    final success = await _apiService.processTransaction(
+    final status = await _apiService.processTransaction(
       cartData: cartData,
-      amountPaid: total,
-      globalDiscount: discountAmount,
+      amountPaid: amountPaid.toDouble(),
+      paymentMethod: paymentMethod,
+      globalDiscount: discountAmount.toDouble(),
     );
 
     _isLoading = false;
 
-    if (success) {
+    if (status == 'online' || status.startsWith('offline')) {
       clearCart();
     } else {
       notifyListeners();
     }
 
-    return success;
+    return status;
   }
 }
